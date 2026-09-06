@@ -24,3 +24,10 @@ greybox_tmp/
 
 c5_pin_model_dump.txt
 PLLJ_PLLSPE_INFO.txt
+
+# Questa / ModelSim
+work/
+transcript
+*.wlf
+modelsim.ini
+vsim_stacktrace.vstf
