@@ -1,9 +1,13 @@
 db/
 incremental_db/
-output_files/
 simulation/
 greybox_tmp/
 .qsys_edit/
+
+# keep only the .sof from the Quartus output folder
+output_files/*
+!output_files/
+!output_files/*.sof
 
 *.rpt
 *.summary
@@ -17,15 +21,19 @@ greybox_tmp/
 *.orig
 *.qar
 
-*.sof
 *.pof
 *.jic
 *.rbf
+*.cdf
+*.jditmp
+
+# T4 was never programmed to the board, no pin assignments
+T4/**/output_files/*.sof
 
 c5_pin_model_dump.txt
 PLLJ_PLLSPE_INFO.txt
 
-# Questa / ModelSim
+# Questa/ModelSim
 work/
 transcript
 *.wlf
