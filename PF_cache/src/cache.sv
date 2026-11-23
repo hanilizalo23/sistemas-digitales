@@ -5,11 +5,12 @@
 //-------------------------------------------------------------
 // Nelida Hernandez, ITESO, 11/16/2026
 //-------------------------------------------------------------
+// N-way set associative cache, write-back with write-allocate, Round Robin replacement
 //
 // Write-back: a write stays in the cache and its line gets dirty, memory only gets it when the line is replaced
 // Write-through would send every write to memory as well, so no dirty bit and no write-back would be needed, it's an option for later
 //
-// Request side: one word,  the requester holds the request until resp_ready
+// Request side: one word, the requester holds the request until resp_ready
 // Memory side: one whole line, so it doesn't care what is behind (a model, the Avalon adapter or a bus)
 //
 // Word address (25 bits): [24:5] tag | [4:2] set | [1:0] offset
@@ -33,7 +34,7 @@ module cache #(
 	output logic                          resp_ready, // one-clock pulse: access done
 	output logic [WORD_W-1:0]             resp_rdata, // word read (valid with resp_ready)
 	// memory side (whole lines)
-	output logic                          mem_valid,  // request to memory, held until mem_ready
+	output logic                          mem_valid,  // request to memory; held until mem_ready
 	output logic                          mem_we,     // 1: write-back, 0: read a line
 	output logic [ADDR_W-$clog2(WORDS)-1:0] mem_addr, // line address (no offset bits)
 	output logic [WORDS-1:0][WORD_W-1:0]  mem_wdata,  // line to write
@@ -96,9 +97,9 @@ module cache #(
 		.ev_evict(ev_evict)
 	);
 
-	// valid, dirty and tag. Written in two cases:
-	// write hit --> the hit way becomes dirty
-	// fill      --> the victim way gets the new tag, clean
+	// valid, dirty and tag, written in two cases:
+	//   write hit -> the hit way becomes dirty
+	//   fill      -> the victim way gets the new tag, clean
 	tag_array #(.WAYS(WAYS), .SETS(SETS), .TAG_W(TAG_W)) tag_store (
 		.clk(clk), 
 		.rst(rst), 
@@ -106,8 +107,14 @@ module cache #(
 		.valid_set(valid_set), 
 		.dirty_set(dirty_set), 
 		.tag_set(tag_set),
+		.snoop_index('0),                    // no snooping in this cache
+		.snoop_valid_set(), 
+		.snoop_dirty_set(), 
+		.snoop_tag_set(),
 		.we(word_we || fill),                // either case
+		.w_index(req_index),                 // always the set of the request
 		.w_way(fill ? victim_way : hit_way), // victim on a fill, hit way on a write
+		.w_valid(1'b1),                      // a written line is always valid
 		.w_dirty(!fill),                     // fill: 0, write hit: 1
 		.w_tag(req_tag)                      // fill: new tag, write hit: same tag
 	);
@@ -117,6 +124,8 @@ module cache #(
 		.clk(clk), 
 		.index(req_index), 
 		.line_set(line_set),
+		.snoop_index('0), 
+		.snoop_line_set(),   // no snooping in this cache
 		.line_we(fill), 
 		.word_we(word_we),
 		.w_way(fill ? victim_way : hit_way),
@@ -134,7 +143,7 @@ module cache #(
 		.hit_way(hit_way)
 	);
 
-	// round robin, moves only when a new line comes in
+	// RR: moves only when a new line comes in
 	replacement_rr #(.WAYS(WAYS), .SETS(SETS)) replacement (
 		.clk(clk), 
 		.rst(rst), 
@@ -147,8 +156,7 @@ module cache #(
 	assign resp_rdata = line_set[hit_way][req_offset];
 
 	// write-back goes where the victim lived (its tag)
-	// allocate asks for the requested line (its tag)
-	// same set in both
+	// allocate asks for the requested line (its tag), same set in both
 	assign mem_addr  = mem_we ? {tag_set[victim_way], req_index} : {req_tag, req_index};
 	assign mem_wdata = line_set[victim_way]; // only used on a write-back
 
